@@ -1,0 +1,97 @@
+{
+  "name": "Productivity Analysis Workflow",
+  "description": "Analyzes task completion patterns and generates productivity insights",
+  "trigger": {
+    "type": "schedule",
+    "schedule": {
+      "days": ["Sunday"],
+      "time": "20:00"
+    }
+  },
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Get Date Range",
+      "type": "function",
+      "function": "const now = new Date();\nconst today = now.toISOString().split('T')[0];\n\n// Get start of last week (Sunday)\nconst lastWeekStart = new Date(now);\nlastWeekStart.setDate(now.getDate() - now.getDay() - 7);\nconst lastWeekStartStr = lastWeekStart.toISOString().split('T')[0];\n\n// Get end of last week (Saturday)\nconst lastWeekEnd = new Date(lastWeekStart);\nlastWeekEnd.setDate(lastWeekStart.getDate() + 6);\nconst lastWeekEndStr = lastWeekEnd.toISOString().split('T')[0];\n\nreturn { today, lastWeekStartStr, lastWeekEndStr };"
+    },
+    {
+      "id": "2",
+      "name": "Get Completed Tasks",
+      "type": "airtable",
+      "operation": "list",
+      "table": "Tasks",
+      "filter": "{Status} = \"Completed\" AND {Completed At} >= \"{{$node[\"Get Date Range\"].json.lastWeekStartStr}}\" AND {Completed At} <= \"{{$node[\"Get Date Range\"].json.lastWeekEndStr}}\""
+    },
+    {
+      "id": "3",
+      "name": "Get All Tasks",
+      "type": "airtable",
+      "operation": "list",
+      "table": "Tasks",
+      "filter": "{Due Date} >= \"{{$node[\"Get Date Range\"].json.lastWeekStartStr}}\" AND {Due Date} <= \"{{$node[\"Get Date Range\"].json.lastWeekEndStr}}\""
+    },
+    {
+      "id": "4",
+      "name": "Analyze Productivity",
+      "type": "function",
+      "function": "const completedTasks = $node[\"Get Completed Tasks\"].json;\nconst allTasks = $node[\"Get All Tasks\"].json;\n\n// Calculate task completion rate\nconst taskCompletionRate = allTasks.length > 0 ? completedTasks.length / allTasks.length : 0;\n\n// Analyze most productive day\nconst dayCount = {};\ncompletedTasks.forEach(task => {\n  const completedDate = new Date(task.fields[\"Completed At\"]);\n  const dayOfWeek = completedDate.toLocaleDateString('en-US', { weekday: 'long' });\n  dayCount[dayOfWeek] = (dayCount[dayOfWeek] || 0) + 1;\n});\n\nlet mostProductiveDay = 'None';\nlet maxTasks = 0;\nfor (const day in dayCount) {\n  if (dayCount[day] > maxTasks) {\n    mostProductiveDay = day;\n    maxTasks = dayCount[day];\n  }\n}\n\n// Analyze most productive time\nconst timeCount = {\n  'Morning (6am-12pm)': 0,\n  'Afternoon (12pm-5pm)': 0,\n  'Evening (5pm-10pm)': 0,\n  'Night (10pm-6am)': 0\n};\n\ncompletedTasks.forEach(task => {\n  const completedDate = new Date(task.fields[\"Completed At\"]);\n  const hour = completedDate.getHours();\n  \n  if (hour >= 6 && hour < 12) {\n    timeCount['Morning (6am-12pm)']++;\n  } else if (hour >= 12 && hour < 17) {\n    timeCount['Afternoon (12pm-5pm)']++;\n  } else if (hour >= 17 && hour < 22) {\n    timeCount['Evening (5pm-10pm)']++;\n  } else {\n    timeCount['Night (10pm-6am)']++;\n  }\n});\n\nlet mostProductiveTime = 'None';\nmaxTasks = 0;\nfor (const time in timeCount) {\n  if (timeCount[time] > maxTasks) {\n    mostProductiveTime = time;\n    maxTasks = timeCount[time];\n  }\n}\n\n// Calculate average tasks per day\nconst daysInWeek = 7;\nconst averageTasksPerDay = completedTasks.length / daysInWeek;\n\n// Generate insights\nconst insights = [];\n\n// Insight 1: Priority completion rates\nconst highPriorityCompleted = completedTasks.filter(task => task.fields.Priority === 'High').length;\nconst highPriorityTotal = allTasks.filter(task => task.fields.Priority === 'High').length;\nconst highPriorityRate = highPriorityTotal > 0 ? highPriorityCompleted / highPriorityTotal : 0;\n\nconst mediumPriorityCompleted = completedTasks.filter(task => task.fields.Priority === 'Medium').length;\nconst mediumPriorityTotal = allTasks.filter(task => task.fields.Priority === 'Medium').length;\nconst mediumPriorityRate = mediumPriorityTotal > 0 ? mediumPriorityCompleted / mediumPriorityTotal : 0;\n\nif (highPriorityRate > 0 && mediumPriorityRate > 0) {\n  const ratio = highPriorityRate / mediumPriorityRate;\n  insights.push(`High priority tasks are completed ${ratio.toFixed(1)}x faster than medium priority tasks`);\n}\n\n// Insight 2: Time-specific tasks\nconst tasksWithTime = allTasks.filter(task => task.fields.Time).length;\nconst tasksWithTimeCompleted = completedTasks.filter(task => task.fields.Time).length;\nconst tasksWithTimeRate = tasksWithTime > 0 ? tasksWithTimeCompleted / tasksWithTime : 0;\n\nconst tasksWithoutTime = allTasks.filter(task => !task.fields.Time).length;\nconst tasksWithoutTimeCompleted = completedTasks.filter(task => !task.fields.Time).length;\nconst tasksWithoutTimeRate = tasksWithoutTime > 0 ? tasksWithoutTimeCompleted / tasksWithoutTime : 0;\n\nif (tasksWithTimeRate > 0 && tasksWithoutTimeRate > 0) {\n  const percentage = ((tasksWithTimeRate / tasksWithoutTimeRate) - 1) * 100;\n  if (percentage > 0) {\n    insights.push(`Tasks with specific times are ${percentage.toFixed(0)}% more likely to be completed than those without`);\n  }\n}\n\n// Insight 3: Most productive time insight\nif (mostProductiveTime !== 'None') {\n  const mostProductiveTimeCount = timeCount[mostProductiveTime];\n  const totalCompletedTasks = completedTasks.length;\n  const percentage = totalCompletedTasks > 0 ? (mostProductiveTimeCount / totalCompletedTasks) * 100 : 0;\n  \n  insights.push(`You complete ${percentage.toFixed(0)}% of your tasks during the ${mostProductiveTime.toLowerCase()}`);\n}\n\nreturn {\n  mostProductiveDay,\n  mostProductiveTime,\n  taskCompletionRate,\n  averageTasksPerDay,\n  insights\n};"
+    },
+    {
+      "id": "5",
+      "name": "Save Analysis to Airtable",
+      "type": "airtable",
+      "operation": "create",
+      "table": "Productivity Insights",
+      "fields": {
+        "Week Ending": "{{$node[\"Get Date Range\"].json.lastWeekEndStr}}",
+        "Most Productive Day": "{{$node[\"Analyze Productivity\"].json.mostProductiveDay}}",
+        "Most Productive Time": "{{$node[\"Analyze Productivity\"].json.mostProductiveTime}}",
+        "Task Completion Rate": "{{$node[\"Analyze Productivity\"].json.taskCompletionRate}}",
+        "Average Tasks Per Day": "{{$node[\"Analyze Productivity\"].json.averageTasksPerDay}}",
+        "Insights": "{{$node[\"Analyze Productivity\"].json.insights.join('\\n')}}"
+      }
+    },
+    {
+      "id": "6",
+      "name": "Send Analysis to API",
+      "type": "httpRequest",
+      "url": "http://localhost:5000/api/productivity-insights",
+      "method": "POST",
+      "body": {
+        "mostProductiveDay": "{{$node[\"Analyze Productivity\"].json.mostProductiveDay}}",
+        "mostProductiveTime": "{{$node[\"Analyze Productivity\"].json.mostProductiveTime}}",
+        "taskCompletionRate": "{{$node[\"Analyze Productivity\"].json.taskCompletionRate}}",
+        "averageTasksPerDay": "{{$node[\"Analyze Productivity\"].json.averageTasksPerDay}}",
+        "insights": "{{$node[\"Analyze Productivity\"].json.insights}}",
+        "weekEnding": "{{$node[\"Get Date Range\"].json.lastWeekEndStr}}"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "source": "1",
+      "target": "2"
+    },
+    {
+      "source": "1",
+      "target": "3"
+    },
+    {
+      "source": "2",
+      "target": "4"
+    },
+    {
+      "source": "3",
+      "target": "4"
+    },
+    {
+      "source": "4",
+      "target": "5"
+    },
+    {
+      "source": "5",
+      "target": "6"
+    }
+  ]
+}

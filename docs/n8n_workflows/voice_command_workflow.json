@@ -1,0 +1,209 @@
+{
+  "name": "Voice Command Processing Workflow",
+  "description": "Processes voice commands and updates tasks accordingly",
+  "trigger": {
+    "type": "webhook",
+    "endpoint": "/voice-command"
+  },
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Webhook",
+      "type": "webhook",
+      "webhookId": "voice-command",
+      "responseMode": "onReceived",
+      "responseData": "firstEntryJson"
+    },
+    {
+      "id": "2",
+      "name": "Parse Command Intent",
+      "type": "function",
+      "function": "const command = $input.all()[0].json;\nconst intent = command.intent;\nconst entities = command.entities;\n\nreturn { intent, entities };"
+    },
+    {
+      "id": "3",
+      "name": "Route by Intent",
+      "type": "switch",
+      "rules": [
+        {
+          "name": "Create Task",
+          "condition": "{{$node[\"Parse Command Intent\"].json.intent}} === \"create_task\""
+        },
+        {
+          "name": "Update Task",
+          "condition": "{{$node[\"Parse Command Intent\"].json.intent}} === \"update_task\""
+        },
+        {
+          "name": "Complete Task",
+          "condition": "{{$node[\"Parse Command Intent\"].json.intent}} === \"complete_task\""
+        },
+        {
+          "name": "Query Tasks",
+          "condition": "{{$node[\"Parse Command Intent\"].json.intent}} === \"query_tasks\""
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "name": "Create Task",
+      "type": "airtable",
+      "operation": "create",
+      "table": "Tasks",
+      "fields": {
+        "Title": "{{$node[\"Parse Command Intent\"].json.entities.task}}",
+        "Due Date": "{{$node[\"Parse Command Intent\"].json.entities.date}}",
+        "Time": "{{$node[\"Parse Command Intent\"].json.entities.time}}",
+        "Priority": "{{$node[\"Parse Command Intent\"].json.entities.priority || 'Medium'}}",
+        "Status": "Not Started",
+        "Project": "{{$node[\"Parse Command Intent\"].json.entities.project || 'General'}}",
+        "Created At": "{{$now}}"
+      }
+    },
+    {
+      "id": "5",
+      "name": "Find Task to Update",
+      "type": "airtable",
+      "operation": "list",
+      "table": "Tasks",
+      "filter": "SEARCH(LOWER(\"{{$node[\"Parse Command Intent\"].json.entities.task_reference}}\"), LOWER({Title})) > 0"
+    },
+    {
+      "id": "6",
+      "name": "Update Task",
+      "type": "airtable",
+      "operation": "update",
+      "table": "Tasks",
+      "id": "{{$node[\"Find Task to Update\"].json[0].id}}",
+      "fields": {
+        "Due Date": "{{$node[\"Parse Command Intent\"].json.entities.date || $node[\"Find Task to Update\"].json[0].fields[\"Due Date\"]}}",
+        "Time": "{{$node[\"Parse Command Intent\"].json.entities.time || $node[\"Find Task to Update\"].json[0].fields[\"Time\"]}}",
+        "Priority": "{{$node[\"Parse Command Intent\"].json.entities.priority || $node[\"Find Task to Update\"].json[0].fields[\"Priority\"]}}",
+        "Updated At": "{{$now}}"
+      }
+    },
+    {
+      "id": "7",
+      "name": "Find Task to Complete",
+      "type": "airtable",
+      "operation": "list",
+      "table": "Tasks",
+      "filter": "SEARCH(LOWER(\"{{$node[\"Parse Command Intent\"].json.entities.task_reference}}\"), LOWER({Title})) > 0"
+    },
+    {
+      "id": "8",
+      "name": "Complete Task",
+      "type": "airtable",
+      "operation": "update",
+      "table": "Tasks",
+      "id": "{{$node[\"Find Task to Complete\"].json[0].id}}",
+      "fields": {
+        "Status": "Completed",
+        "Completed At": "{{$now}}",
+        "Updated At": "{{$now}}"
+      }
+    },
+    {
+      "id": "9",
+      "name": "Get Tasks by Query",
+      "type": "airtable",
+      "operation": "list",
+      "table": "Tasks",
+      "filter": "{{$node[\"Parse Command Intent\"].json.entities.timeframe === 'today' ? 'TODAY() = {Due Date}' : $node[\"Parse Command Intent\"].json.entities.timeframe === 'tomorrow' ? 'DATEADD(TODAY(), 1, \"days\") = {Due Date}' : ''}}"
+    },
+    {
+      "id": "10",
+      "name": "Format Task Results",
+      "type": "function",
+      "function": "const tasks = $input.all()[0].json;\nconst timeframe = $node[\"Parse Command Intent\"].json.entities.timeframe;\nconst project = $node[\"Parse Command Intent\"].json.entities.project;\n\nlet filteredTasks = tasks;\nif (project) {\n  filteredTasks = tasks.filter(task => task.fields.Project && task.fields.Project.toLowerCase() === project.toLowerCase());\n}\n\nconst taskCount = filteredTasks.length;\nlet response = '';\n\nif (taskCount === 0) {\n  response = `You don't have any tasks scheduled for ${timeframe || 'the specified time'}.`;\n} else {\n  response = `You have ${taskCount} task${taskCount !== 1 ? 's' : ''} for ${timeframe || 'the specified time'}. `;\n  \n  const tasksToDetail = Math.min(taskCount, 3);\n  if (tasksToDetail > 0) {\n    response += 'These include: ';\n    \n    for (let i = 0; i < tasksToDetail; i++) {\n      const task = filteredTasks[i];\n      response += `${task.fields.Title}${task.fields.Time ? ` at ${task.fields.Time}` : ''}`;\n      \n      if (i < tasksToDetail - 1) {\n        response += ', ';\n      } else {\n        response += '.';\n      }\n    }\n    \n    if (taskCount > tasksToDetail) {\n      response += ` And ${taskCount - tasksToDetail} more.`;\n    }\n  }\n}\n\nreturn { response, tasks: filteredTasks };"
+    },
+    {
+      "id": "11",
+      "name": "Log User Activity",
+      "type": "airtable",
+      "operation": "create",
+      "table": "User Activity",
+      "fields": {
+        "Action": "{{$node[\"Parse Command Intent\"].json.intent}}",
+        "Command": "{{$input.all()[0].json.transcript}}",
+        "Timestamp": "{{$now}}",
+        "Success": true,
+        "Details": "{{$node[\"Parse Command Intent\"].json.intent === 'create_task' ? $node[\"Create Task\"].json.id : $node[\"Parse Command Intent\"].json.intent === 'update_task' ? $node[\"Update Task\"].json.id : $node[\"Parse Command Intent\"].json.intent === 'complete_task' ? $node[\"Complete Task\"].json.id : $node[\"Format Task Results\"].json.response}}"
+      }
+    },
+    {
+      "id": "12",
+      "name": "Send Response to API",
+      "type": "httpRequest",
+      "url": "http://localhost:5000/api/voice-response",
+      "method": "POST",
+      "body": {
+        "intent": "{{$node[\"Parse Command Intent\"].json.intent}}",
+        "response": "{{$node[\"Parse Command Intent\"].json.intent === 'create_task' ? 'Task created successfully' : $node[\"Parse Command Intent\"].json.intent === 'update_task' ? 'Task updated successfully' : $node[\"Parse Command Intent\"].json.intent === 'complete_task' ? 'Task completed successfully' : $node[\"Format Task Results\"].json.response}}",
+        "success": true,
+        "timestamp": "{{$now}}"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "source": "1",
+      "target": "2"
+    },
+    {
+      "source": "2",
+      "target": "3"
+    },
+    {
+      "source": "3",
+      "target": "4",
+      "sourceOutput": "Create Task"
+    },
+    {
+      "source": "3",
+      "target": "5",
+      "sourceOutput": "Update Task"
+    },
+    {
+      "source": "3",
+      "target": "7",
+      "sourceOutput": "Complete Task"
+    },
+    {
+      "source": "3",
+      "target": "9",
+      "sourceOutput": "Query Tasks"
+    },
+    {
+      "source": "5",
+      "target": "6"
+    },
+    {
+      "source": "7",
+      "target": "8"
+    },
+    {
+      "source": "9",
+      "target": "10"
+    },
+    {
+      "source": "4",
+      "target": "11"
+    },
+    {
+      "source": "6",
+      "target": "11"
+    },
+    {
+      "source": "8",
+      "target": "11"
+    },
+    {
+      "source": "10",
+      "target": "11"
+    },
+    {
+      "source": "11",
+      "target": "12"
+    }
+  ]
+}

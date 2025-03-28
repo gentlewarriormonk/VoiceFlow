@@ -1,0 +1,87 @@
+{
+  "name": "Task Reminder Workflow",
+  "description": "Sends reminders for upcoming tasks",
+  "trigger": {
+    "type": "schedule",
+    "schedule": {
+      "interval": ["1", "hour"]
+    }
+  },
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Get Current Time",
+      "type": "function",
+      "function": "const now = new Date();\nconst today = now.toISOString().split('T')[0];\nconst currentHour = now.getHours();\nconst nextHour = (currentHour + 1) % 24;\n\nreturn { now, today, currentHour, nextHour };"
+    },
+    {
+      "id": "2",
+      "name": "Get Upcoming Tasks",
+      "type": "airtable",
+      "operation": "list",
+      "table": "Tasks",
+      "filter": "{Due Date} = \"{{$node[\"Get Current Time\"].json.today}}\" AND HOUR({Time}) >= {{$node[\"Get Current Time\"].json.currentHour}} AND HOUR({Time}) < {{$node[\"Get Current Time\"].json.nextHour}} AND {Status} != \"Completed\""
+    },
+    {
+      "id": "3",
+      "name": "Check If Tasks Exist",
+      "type": "if",
+      "condition": "{{$node[\"Get Upcoming Tasks\"].json.length}} > 0"
+    },
+    {
+      "id": "4",
+      "name": "Format Reminder Message",
+      "type": "function",
+      "function": "const tasks = $input.all()[0].json;\nconst taskCount = tasks.length;\n\nlet message = `Reminder: You have ${taskCount} task${taskCount !== 1 ? 's' : ''} coming up in the next hour. `;\n\nfor (let i = 0; i < taskCount; i++) {\n  const task = tasks[i];\n  message += `${task.fields.Title} at ${task.fields.Time}`;\n  \n  if (i < taskCount - 1) {\n    message += ', ';\n  } else {\n    message += '.';\n  }\n}\n\nreturn { message, taskCount };"
+    },
+    {
+      "id": "5",
+      "name": "Send Reminder to API",
+      "type": "httpRequest",
+      "url": "http://localhost:5000/api/task-reminder",
+      "method": "POST",
+      "body": {
+        "message": "{{$node[\"Format Reminder Message\"].json.message}}",
+        "taskCount": "{{$node[\"Format Reminder Message\"].json.taskCount}}",
+        "timestamp": "{{$now}}"
+      }
+    },
+    {
+      "id": "6",
+      "name": "Log Reminder Sent",
+      "type": "airtable",
+      "operation": "create",
+      "table": "User Activity",
+      "fields": {
+        "Action": "reminder_sent",
+        "Command": "system_generated",
+        "Timestamp": "{{$now}}",
+        "Success": true,
+        "Details": "{{$node[\"Format Reminder Message\"].json.message}}"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "source": "1",
+      "target": "2"
+    },
+    {
+      "source": "2",
+      "target": "3"
+    },
+    {
+      "source": "3",
+      "target": "4",
+      "sourceOutput": "true"
+    },
+    {
+      "source": "4",
+      "target": "5"
+    },
+    {
+      "source": "5",
+      "target": "6"
+    }
+  ]
+}

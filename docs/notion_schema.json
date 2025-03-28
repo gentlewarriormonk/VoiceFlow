@@ -1,0 +1,158 @@
+{
+  "name": "AI Task Manager - Notion Database",
+  "databases": [
+    {
+      "name": "Tasks",
+      "properties": [
+        {
+          "name": "Title",
+          "type": "title",
+          "required": true
+        },
+        {
+          "name": "Description",
+          "type": "rich_text"
+        },
+        {
+          "name": "Due Date",
+          "type": "date"
+        },
+        {
+          "name": "Time",
+          "type": "rich_text"
+        },
+        {
+          "name": "Priority",
+          "type": "select",
+          "options": ["High", "Medium", "Low"]
+        },
+        {
+          "name": "Status",
+          "type": "select",
+          "options": ["Not Started", "In Progress", "Completed"]
+        },
+        {
+          "name": "Project",
+          "type": "select",
+          "options": ["Marketing Campaign", "Internal", "Finance", "Sales", "Personal"]
+        },
+        {
+          "name": "Tags",
+          "type": "multi_select",
+          "options": ["Work", "Personal", "Urgent", "Meeting", "Follow-up"]
+        },
+        {
+          "name": "Created At",
+          "type": "created_time"
+        },
+        {
+          "name": "Updated At",
+          "type": "last_edited_time"
+        },
+        {
+          "name": "Completed At",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "properties": [
+        {
+          "name": "Name",
+          "type": "title",
+          "required": true
+        },
+        {
+          "name": "Description",
+          "type": "rich_text"
+        },
+        {
+          "name": "Status",
+          "type": "select",
+          "options": ["Active", "Completed", "On Hold"]
+        },
+        {
+          "name": "Start Date",
+          "type": "date"
+        },
+        {
+          "name": "End Date",
+          "type": "date"
+        },
+        {
+          "name": "Tasks",
+          "type": "relation",
+          "relation_database": "Tasks",
+          "relation_property": "Project"
+        }
+      ]
+    },
+    {
+      "name": "User Activity",
+      "properties": [
+        {
+          "name": "Action",
+          "type": "title",
+          "required": true
+        },
+        {
+          "name": "Command",
+          "type": "rich_text"
+        },
+        {
+          "name": "Timestamp",
+          "type": "created_time",
+          "required": true
+        },
+        {
+          "name": "Related Task",
+          "type": "relation",
+          "relation_database": "Tasks"
+        },
+        {
+          "name": "Success",
+          "type": "checkbox"
+        },
+        {
+          "name": "Details",
+          "type": "rich_text"
+        }
+      ]
+    },
+    {
+      "name": "Daily Summaries",
+      "properties": [
+        {
+          "name": "Date",
+          "type": "title",
+          "required": true
+        },
+        {
+          "name": "Summary Text",
+          "type": "rich_text"
+        },
+        {
+          "name": "Task Count",
+          "type": "number"
+        },
+        {
+          "name": "High Priority Count",
+          "type": "number"
+        },
+        {
+          "name": "Completed Count",
+          "type": "number"
+        },
+        {
+          "name": "Generated At",
+          "type": "created_time"
+        },
+        {
+          "name": "Delivered",
+          "type": "checkbox"
+        }
+      ]
+    }
+  ]
+}

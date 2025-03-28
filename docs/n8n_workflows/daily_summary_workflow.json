@@ -1,0 +1,104 @@
+{
+  "name": "Daily Task Summary Workflow",
+  "description": "Generates and sends a daily summary of tasks every morning",
+  "trigger": {
+    "type": "schedule",
+    "schedule": {
+      "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+      "time": "08:00"
+    }
+  },
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Get Today's Date",
+      "type": "function",
+      "function": "const today = new Date().toISOString().split('T')[0]; return { today };"
+    },
+    {
+      "id": "2",
+      "name": "Get Tasks for Today",
+      "type": "airtable",
+      "operation": "list",
+      "table": "Tasks",
+      "filter": "{{$node[\"Get Today's Date\"].json.today}} = DATESTR({Due Date})"
+    },
+    {
+      "id": "3",
+      "name": "Count High Priority Tasks",
+      "type": "function",
+      "function": "const highPriorityTasks = $input.all().filter(task => task.json.fields.Priority === 'High'); return { count: highPriorityTasks.length, tasks: highPriorityTasks };"
+    },
+    {
+      "id": "4",
+      "name": "Generate Summary Text",
+      "type": "function",
+      "function": "const tasks = $input.all()[0].json;\nconst highPriorityCount = $node[\"Count High Priority Tasks\"].json.count;\nconst taskCount = tasks.length;\n\nlet summary = `Good morning! You have ${taskCount} task${taskCount !== 1 ? 's' : ''} scheduled for today`;\n\nif (highPriorityCount > 0) {\n  summary += `, including ${highPriorityCount} high priority task${highPriorityCount !== 1 ? 's' : ''}`;\n}\n\nsummary += '. ';\n\nif (taskCount > 0) {\n  summary += 'Here are your upcoming tasks: ';\n  \n  const tasksToDetail = Math.min(taskCount, 3);\n  for (let i = 0; i < tasksToDetail; i++) {\n    const task = tasks[i];\n    summary += `${task.fields.Title}${task.fields.Time ? ` at ${task.fields.Time}` : ''}`;\n    \n    if (i < tasksToDetail - 1) {\n      summary += ', ';\n    } else {\n      summary += '.';\n    }\n  }\n  \n  if (taskCount > tasksToDetail) {\n    summary += ` And ${taskCount - tasksToDetail} more task${taskCount - tasksToDetail !== 1 ? 's' : ''}.`;\n  }\n}\n\nreturn { summary, taskCount, highPriorityCount };"
+    },
+    {
+      "id": "5",
+      "name": "Save Summary to Airtable",
+      "type": "airtable",
+      "operation": "create",
+      "table": "Daily Summaries",
+      "fields": {
+        "Date": "{{$node[\"Get Today's Date\"].json.today}}",
+        "Summary Text": "{{$node[\"Generate Summary Text\"].json.summary}}",
+        "Task Count": "{{$node[\"Generate Summary Text\"].json.taskCount}}",
+        "High Priority Count": "{{$node[\"Generate Summary Text\"].json.highPriorityCount}}",
+        "Generated At": "{{$now}}",
+        "Delivered": false
+      }
+    },
+    {
+      "id": "6",
+      "name": "Send to API",
+      "type": "httpRequest",
+      "url": "http://localhost:5000/api/daily-summary",
+      "method": "POST",
+      "body": {
+        "summary": "{{$node[\"Generate Summary Text\"].json.summary}}",
+        "taskCount": "{{$node[\"Generate Summary Text\"].json.taskCount}}",
+        "highPriorityCount": "{{$node[\"Generate Summary Text\"].json.highPriorityCount}}",
+        "date": "{{$node[\"Get Today's Date\"].json.today}}"
+      }
+    },
+    {
+      "id": "7",
+      "name": "Update Delivery Status",
+      "type": "airtable",
+      "operation": "update",
+      "table": "Daily Summaries",
+      "id": "{{$node[\"Save Summary to Airtable\"].json.id}}",
+      "fields": {
+        "Delivered": true
+      }
+    }
+  ],
+  "connections": [
+    {
+      "source": "1",
+      "target": "2"
+    },
+    {
+      "source": "2",
+      "target": "3"
+    },
+    {
+      "source": "2",
+      "target": "4"
+    },
+    {
+      "source": "4",
+      "target": "5"
+    },
+    {
+      "source": "5",
+      "target": "6"
+    },
+    {
+      "source": "6",
+      "target": "7"
+    }
+  ]
+}

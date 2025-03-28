@@ -1,0 +1,157 @@
+{
+  "name": "AI Task Manager - Airtable Base",
+  "tables": [
+    {
+      "name": "Tasks",
+      "fields": [
+        {
+          "name": "Title",
+          "type": "singleLineText",
+          "required": true
+        },
+        {
+          "name": "Description",
+          "type": "multilineText"
+        },
+        {
+          "name": "Due Date",
+          "type": "date"
+        },
+        {
+          "name": "Time",
+          "type": "singleLineText"
+        },
+        {
+          "name": "Priority",
+          "type": "singleSelect",
+          "options": ["High", "Medium", "Low"]
+        },
+        {
+          "name": "Status",
+          "type": "singleSelect",
+          "options": ["Not Started", "In Progress", "Completed"]
+        },
+        {
+          "name": "Project",
+          "type": "singleLineText"
+        },
+        {
+          "name": "Tags",
+          "type": "multiSelect",
+          "options": ["Work", "Personal", "Urgent", "Meeting", "Follow-up"]
+        },
+        {
+          "name": "Created At",
+          "type": "dateTime"
+        },
+        {
+          "name": "Updated At",
+          "type": "dateTime"
+        },
+        {
+          "name": "Completed At",
+          "type": "dateTime"
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "fields": [
+        {
+          "name": "Name",
+          "type": "singleLineText",
+          "required": true
+        },
+        {
+          "name": "Description",
+          "type": "multilineText"
+        },
+        {
+          "name": "Status",
+          "type": "singleSelect",
+          "options": ["Active", "Completed", "On Hold"]
+        },
+        {
+          "name": "Start Date",
+          "type": "date"
+        },
+        {
+          "name": "End Date",
+          "type": "date"
+        },
+        {
+          "name": "Tasks",
+          "type": "lookup",
+          "lookupTableName": "Tasks",
+          "lookupFieldName": "Project"
+        }
+      ]
+    },
+    {
+      "name": "User Activity",
+      "fields": [
+        {
+          "name": "Action",
+          "type": "singleLineText",
+          "required": true
+        },
+        {
+          "name": "Command",
+          "type": "multilineText"
+        },
+        {
+          "name": "Timestamp",
+          "type": "dateTime",
+          "required": true
+        },
+        {
+          "name": "Related Task",
+          "type": "link",
+          "linkTableName": "Tasks"
+        },
+        {
+          "name": "Success",
+          "type": "checkbox"
+        },
+        {
+          "name": "Details",
+          "type": "multilineText"
+        }
+      ]
+    },
+    {
+      "name": "Daily Summaries",
+      "fields": [
+        {
+          "name": "Date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "Summary Text",
+          "type": "multilineText"
+        },
+        {
+          "name": "Task Count",
+          "type": "number"
+        },
+        {
+          "name": "High Priority Count",
+          "type": "number"
+        },
+        {
+          "name": "Completed Count",
+          "type": "number"
+        },
+        {
+          "name": "Generated At",
+          "type": "dateTime"
+        },
+        {
+          "name": "Delivered",
+          "type": "checkbox"
+        }
+      ]
+    }
+  ]
+}
