@@ -1,0 +1,25 @@
+# Environment files
+.env
+.env.local
+.env.*
+
+# macOS system files
+.DS_Store
+
+# Node modules
+node_modules/
+npm-debug.log*
+
+# VSCode settings (optional)
+.vscode/
+
+# Logs
+logs/
+*.log
+
+# Build output
+dist/
+build/
+
+# OS-generated files
+Thumbs.db
